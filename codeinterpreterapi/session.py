@@ -4,7 +4,7 @@ from typing import Optional
 from codeboxapi import CodeBox  # type: ignore
 from codeboxapi.schema import CodeBoxOutput  # type: ignore
 from langchain.tools import StructuredTool, BaseTool
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models import AzureChatOpenAI
 from langchain.chat_models.base import BaseChatModel
 from langchain.prompts.chat import MessagesPlaceholder
 from langchain.agents import AgentExecutor, BaseSingleActionAgent
@@ -24,13 +24,16 @@ class CodeInterpreterSession:
         self,
         model=None,
         openai_api_key=settings.OPENAI_API_KEY,
+        deployment_name=settings.DEPLOYMENT_NAME,
+        openai_api_base=settings.OPENAI_API_BASE,
+        openai_api_version=settings.OPENAI_API_VERSION,
         verbose=settings.VERBOSE,
         tools: list[BaseTool] = None
     ) -> None:
         self.codebox = CodeBox()
         self.verbose = verbose
         self.tools: list[BaseTool] = self._tools(tools)
-        self.llm: BaseChatModel = self._llm(model, openai_api_key)
+        self.llm: BaseChatModel = self._llm(model, openai_api_key,deployment_name,openai_api_base,openai_api_version)
         self.agent_executor: AgentExecutor = self._agent_executor()
         self.input_files: list[File] = []
         self.output_files: list[File] = []
@@ -54,21 +57,43 @@ class CodeInterpreterSession:
             ),
         ]
 
-    def _llm(self, model: Optional[str] = None, openai_api_key: Optional[str] = None) -> BaseChatModel:
+    def _llm(self, model: Optional[str] = None, openai_api_key: Optional[str] = None,deployment_name: Optional[str] = None,openai_api_base: Optional[str] = None,openai_api_version: Optional[str] = None) -> BaseChatModel:
         if model is None:
             model = "gpt-4"
 
+        if deployment_name is None:
+            raise ValueError(
+                "OpenAI API key missing. Set DEPLOYENT_NAME env variable or pass `deployment_name` to session."
+            )
+            
+        if openai_api_base is None:
+            raise ValueError(
+                "OpenAI API key missing. Set OPENAI_API_BASE env variable or pass `openai_api_base` to session."
+            )
+
+        if openai_api_version is None:
+            raise ValueError(
+                "OpenAI API key missing. Set OPENAI_API_VERSION env variable or pass `openai_api_version` to session."
+            )
+            
         if openai_api_key is None:
             raise ValueError(
                 "OpenAI API key missing. Set OPENAI_API_KEY env variable or pass `openai_api_key` to session."
             )
-
-        return ChatOpenAI(
+            
+        return AzureChatOpenAI(
             temperature=0.03,
             model=model,
             openai_api_key=openai_api_key,
             max_retries=3,
             request_timeout=60 * 3,
+            deployment_name=deployment_name,
+            openai_api_type="azure",      #delete to use origin openai api
+            openai_api_base=openai_api_base,
+            openai_api_version=openai_api_version
+            # openai_api_key: str = ""
+            # openai_organization: str = ""
+            # openai_proxy: str = ""
         )  # type: ignore
 
     def _agent(self) -> BaseSingleActionAgent:
